@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>底层逻辑 · 每日启发</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --paper: #f7f3ed;
+    --warm: #c8a96e;
+    --rust: #b5533c;
+    --sage: #4a7c59;
+    --mist: #e8e2d9;
+    --deep: #2c3e50;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Noto Sans SC', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  .app {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 40px 24px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header { text-align: center; margin-bottom: 48px; }
+  .book-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 300;
+    letter-spacing: 4px;
+    color: var(--warm);
+    margin-bottom: 12px;
+    padding: 4px 16px;
+    border: 1px solid var(--warm);
+  }
+  header h1 {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: 2px;
+  }
+  header h1 span { color: var(--rust); }
+  .date-display { margin-top: 12px; font-size: 13px; color: #888; font-weight: 300; letter-spacing: 2px; }
+  .stats-bar { display: flex; gap: 1px; margin-bottom: 32px; background: var(--mist); overflow: hidden; }
+  .stat-item { flex: 1; background: white; padding: 14px; text-align: center; }
+  .stat-num { font-family: 'Noto Serif SC', serif; font-size: 22px; font-weight: 700; color: var(--rust); }
+  .stat-label { font-size: 11px; color: #999; margin-top: 2px; letter-spacing: 1px; }
+  .story-card {
+    background: white;
+    border-radius: 2px;
+    overflow: hidden;
+    box-shadow: 0 2px 40px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04);
+    margin-bottom: 32px;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .story-card.visible { opacity: 1; transform: translateY(0); }
+  .story-card.fade-out { opacity: 0; transform: translateY(-10px); }
+  .card-header {
+    padding: 28px 36px 20px;
+    border-bottom: 1px solid var(--mist);
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+  }
+  .chapter-tag {
+    flex-shrink: 0;
+    background: var(--ink);
+    color: white;
+    font-size: 11px;
+    letter-spacing: 2px;
+    padding: 4px 10px;
+    font-weight: 500;
+    margin-top: 4px;
+  }
+  .story-title { font-family: 'Noto Serif SC', serif; font-size: 22px; font-weight: 700; color: var(--ink); line-height: 1.4; }
+  .card-body { padding: 28px 36px; }
+  .story-narrative { font-family: 'Noto Serif SC', serif; font-size: 16px; line-height: 2; color: #333; margin-bottom: 24px; }
+  .story-narrative p { text-indent: 2em; margin-bottom: 12px; }
+  .story-narrative .hl { color: var(--rust); font-weight: 600; }
+  .wisdom-block {
+    border-left: 3px solid var(--warm);
+    padding: 16px 20px;
+    background: #fdf9f3;
+    margin: 24px 0;
+    position: relative;
+  }
+  .wisdom-text { font-family: 'Noto Serif SC', serif; font-size: 15px; font-style: italic; color: var(--deep); line-height: 1.8; }
+  .application-section { background: var(--mist); padding: 20px 24px; border-top: 2px solid var(--warm); }
+  .application-label { font-size: 10px; letter-spacing: 3px; font-weight: 500; color: var(--warm); margin-bottom: 8px; text-transform: uppercase; }
+  .application-text { font-size: 14px; line-height: 1.8; color: #444; }
+  .reflection-prompt { background: var(--ink); color: white; padding: 20px 24px; }
+  .reflection-label { font-size: 10px; letter-spacing: 3px; color: var(--warm); margin-bottom: 8px; text-transform: uppercase; }
+  .reflection-text { font-family: 'Noto Serif SC', serif; font-size: 14px; line-height: 1.8; color: #ddd; }
+  .nav-section { display: flex; gap: 12px; margin-bottom: 32px; }
+  .nav-btn {
+    flex: 1; padding: 14px; border: 1px solid rgba(0,0,0,0.15);
+    background: white; cursor: pointer;
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 13px; letter-spacing: 1px; color: var(--ink);
+    transition: all 0.2s;
+  }
+  .nav-btn:hover { background: var(--ink); color: white; border-color: var(--ink); }
+  .nav-btn.primary { background: var(--rust); color: white; border-color: var(--rust); }
+  .nav-btn.primary:hover { background: #9a4532; }
+  .progress-section { text-align: center; margin-bottom: 32px; }
+  .progress-label { font-size: 11px; letter-spacing: 2px; color: #999; margin-bottom: 12px; text-transform: uppercase; }
+  .dots { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; max-width: 400px; margin: 0 auto; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mist); border: 1px solid #ccc; transition: all 0.3s; cursor: pointer; }
+  .dot.read { background: var(--sage); border-color: var(--sage); }
+  .dot.current { background: var(--rust); border-color: var(--rust); transform: scale(1.3); }
+  footer { text-align: center; padding: 20px 0; font-size: 12px; color: #aaa; letter-spacing: 1px; margin-top: auto; }
+  @media (max-width: 480px) {
+    .app { padding: 24px 16px; }
+    .card-header { padding: 20px; flex-direction: column; gap: 10px; }
+    .card-body { padding: 20px; }
+    .story-title { font-size: 18px; }
+    .story-narrative { font-size: 15px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="book-badge">底层逻辑 · 刘润</div>
+    <h1>每日<span>启发</span></h1>
+    <div class="date-display" id="dateDisplay"></div>
+  </header>
+  <div class="stats-bar">
+    <div class="stat-item"><div class="stat-num" id="readCount">0</div><div class="stat-label">已读故事</div></div>
+    <div class="stat-item"><div class="stat-num" id="totalCount">20</div><div class="stat-label">全部故事</div></div>
+    <div class="stat-item"><div class="stat-num" id="streakCount">1</div><div class="stat-label">连续天数</div></div>
+  </div>
+  <div class="story-card" id="storyCard">
+    <div class="card-header">
+      <div class="chapter-tag" id="chapterTag"></div>
+      <div class="story-title" id="storyTitle"></div>
+    </div>
+    <div class="card-body">
+      <div class="story-narrative" id="storyNarrative"></div>
+      <div class="wisdom-block"><div class="wisdom-text" id="wisdomText"></div></div>
+    </div>
+    <div class="application-section">
+      <div class="application-label">职场应用</div>
+      <div class="application-text" id="applicationText"></div>
+    </div>
+    <div class="reflection-prompt">
+      <div class="reflection-label">今日反思</div>
+      <div class="reflection-text" id="reflectionText"></div>
+    </div>
+  </div>
+  <div class="nav-section">
+    <button class="nav-btn" id="prevBtn">← 上一则</button>
+    <button class="nav-btn primary" id="nextBtn">下一则 →</button>
+  </div>
+  <div class="progress-section">
+    <div class="progress-label">故事进度</div>
+    <div class="dots" id="dotsContainer"></div>
+  </div>
+  <footer>《底层逻辑》刘润 · 每天一则，改变思维</footer>
+</div>
+
+<script>
+(function() {
+
+var stories = [
+  {
+    chapter: "第一章",
+    title: "谁的损失大，就是谁的错",
+    paragraphs: [
+      "李嘉诚曾遭绑架，绑匪索取高额赎金。当身边人义愤填膺、讨论绑匪有多可恶时，李嘉诚却只平静地说了一句话：这是我的错。",
+      "旁人愕然——明明是绑匪绑了他，为何是他的错？",
+      "李嘉诚的逻辑很简单：绑匪是在做他们的课题，而遭受损失的，是我。<span class='hl'>谁的损失大，就是谁的错。</span>这不是认怂，这是最顶级的商人思维。",
+      "法学家说是绑匪的错，经济学家说是工地没锁门的地主的错，但商人的思维是：不管谁的错，损失都落在我身上，所以我要先想如何减少自己的损失，而不是花精力追责。"
+    ],
+    wisdom: "谁的损失大，就是谁的错。责怪别人改变不了损失，只有自己才能改变最终的结果。",
+    application: "当客户投诉、团队出错、供应商失误时，先问：这件事我的损失最大吗？如果是，先想如何止损、如何复盘预防，而不是第一时间追责。责任可以秋后算账，止损要立刻行动。",
+    reflection: "今天有哪件让你懊恼的事，其实你在第一时间把精力花在了谁的错，而不是怎么解决上？"
+  },
+  {
+    chapter: "第一章",
+    title: "三种对错观：法学家、经济学家与商人",
+    paragraphs: [
+      "一个坏人把无辜的人骗进没有锁门的工地，好人失足摔死了。这是谁的错？",
+      "法学家说是坏人的错。经济学家说是工地主的错——因为锁门的成本远低于整个社会为此付出的代价。商人说是受害者自己的错——因为只有当你把我的错挂在嘴边，你才会把眼睛擦亮。",
+      "一个人走在斑马线上，一辆失控的卡车冲来，他说：他不能撞我，他违规！于是他没有让开——然后被撞死了。",
+      "<span class='hl'>他在法律上是对的，但在商人的逻辑里，他输了一切。</span>对了又如何？你已经无法再抗议了。"
+    ],
+    wisdom: "如果你是评论家，选法学家立场；如果你是政策制定者，选经济学家立场；如果死的将是你自己——请选商人立场：我的错，都是我的错。",
+    application: "门店出现问题时，不要先追问是哪个供应商的货还是哪个 BM 没执行。先问：作为负责人，我能做什么让损失最小、让问题不再发生？追责是管理动作，止损才是第一动作。",
+    reflection: "最近一次团队出错，你第一反应是寻找责任人，还是先想如何修复？这两种顺序，反映了两种不同的领导力。"
+  },
+  {
+    chapter: "第一章",
+    title: "人生三层智慧：博弈、定力与选择",
+    paragraphs: [
+      "三条猎狗追一只土拨鼠，土拨鼠钻进树洞。突然，一只兔子跑出来，猎狗们立刻追了过去，最后兔子跑掉了，猎狗两手空空。",
+      "故事讲完，很多人说：兔子不会爬树。或者：一只兔子怎么砸晕三条狗。但几乎没有人问：<span class='hl'>土拨鼠呢？</span>",
+      "刘润说，这就是我们的人生——总是被眼前的兔子吸引，忘记了最初追的土拨鼠。定力，才是人生第二层智慧。",
+      "而最顶层的智慧是：选择，你一开始就要追对猎物。博弈是第三层（在竞争中全身而退），定力是第二层（不被诱惑带偏），选择才是第一层（一开始就踏上正确的路）。"
+    ],
+    wisdom: "博弈是第三层智慧，定力是第二层，选择才是第一层。与其研究怎么赢得博弈，不如一开始就选对方向。",
+    application: "转换新角色时，会面临很多兔子——各种临时项目、人际关系、短期利益。提醒自己：你的土拨鼠是什么？是建立 Retail Optimisation 的方法论体系？把它写下来贴在屏幕旁边。",
+    reflection: "这个月，有哪件事让你分神了？它是兔子还是土拨鼠？"
+  },
+  {
+    chapter: "第二章",
+    title: "注射式洗脑：小心「为什么」这个陷阱",
+    paragraphs: [
+      "王熙凤在茶水间遇到杜拉拉，轻描淡写地问了一句：拉拉，为什么老板最近总是故意针对你啊？",
+      "杜拉拉心里一沉，开始焦虑……等等。谁说老板在针对她？这是王熙凤说的。但因为「为什么」这三个字，杜拉拉的大脑<span class='hl'>自动跳过了质疑，直接开始寻找原因。</span>",
+      "「为什么＋观点」，是一支注射器。它不需要你同意观点，只需要让你的大脑开始为这个观点找理由——那一刻，观点就已经进入了你的脑海。",
+      "把谣言放在「为什么」后面，是传播谣言的最佳方法。狡猾的人用这个句式注射别人，愚蠢的人却用这个句式注射自己。"
+    ],
+    wisdom: "遇到「为什么＋观点」的句式，先停下来质疑前提：这个观点是真的吗？谁说的？有证据吗？先证伪，再找原因。",
+    application: "当下属说「为什么竞争对手的销量比我们好」，当上级说「为什么这条动线卖不好」——先停下来问：这个前提是真的吗？这条动线真的卖不好，还是只是这一周的数据？",
+    reflection: "最近有没有人对你用过类似的句式？你当时有没有先质疑前提，还是直接开始回答「为什么」？"
+  },
+  {
+    chapter: "第二章",
+    title: "幸存者偏差：看见飞回来的飞机，忘了坠落的那些",
+    paragraphs: [
+      "二战期间，盟军飞机损失惨重。返回的飞机机翼上弹痕累累，军方决定加强机翼钢甲——毕竟，那里弹孔最多。",
+      "但统计学家说了一句让所有人哑口无言的话：<span class='hl'>飞回来的飞机，是因为机翼中弹还能飞。你有没有想过，那些再也没飞回来的飞机，是哪里中弹了？</span>",
+      "后来验证：被击落的飞机，都是机头机尾中弹。返回来的飞机之所以机翼弹孔多，恰恰说明机翼很坚固，中了也没事。",
+      "经验，有时候是最危险的指南针。我们看到的成功案例，都是幸存者。"
+    ],
+    wisdom: "我们看到的成功案例，都是幸存者。那些你没看到的失败者，可能恰恰在做同样的事。学经验要同时追问：失败者在做什么？",
+    application: "分析竞争对手或标杆门店时，不要只看头部在做什么。去研究一下那些倒闭的或萎缩的门店，他们在做什么？避开机头和机尾，比学习机翼更重要。",
+    reflection: "你工作中有没有一条经验，是你从没质疑过的？它会不会是幸存者偏差在作怪？"
+  },
+  {
+    chapter: "第二章",
+    title: "普通人改变结果，顶级优秀的人改变系统",
+    paragraphs: [
+      "几个和尚每天喝粥，但分粥总是不公平。他们试过选德高望重的人分，结果腐败了。试过轮流分，结果每个人到自己那天就多给自己分。设立委员会监督，结果粥凉了还没分完。",
+      "最后，有人提出了一个简单的方案：<span class='hl'>轮流分，但分粥的人最后拿。</span>奇迹发生了——从那天起，每碗粥都分得一样多。",
+      "没有道德说教，没有惩罚机制，只是改变了分粥人与粥之间的关系，整个系统的输出就完全不同了。",
+      "普通的人改变结果，优秀的人改变原因，顶级优秀的人改变模型。"
+    ],
+    wisdom: "解决问题的最高境界，是让问题根本不会发生。不要反复修补结果，要找到那个改变整个系统的关键结构。",
+    application: "与其靠道德要求 BM 做好，不如设计一个「分粥人最后拿」的结构：让 BM 的奖金与他团队的整体达成率挂钩，而不只是他个人指标。结构对了，行为自然跟上。",
+    reflection: "你现在管理的某个问题，是在反复改变结果（不断催促），还是在思考如何改变系统让它不再发生？"
+  },
+  {
+    chapter: "第二章",
+    title: "辩论的秘密：你从没在辩论，你只是在重新定义",
+    paragraphs: [
+      "一场专业辩论赛，看起来双方针锋相对，但有一个暗黑秘密：<span class='hl'>两方其实从来没有真正正面交锋过。</span>",
+      "他们在做的，是不断重新定义关键词。当对方说「人性本善，因为有人本能地牺牲自己救人」，高手的回应不是反驳那个救人的例子，而是说：这个「善」的定义太窄了——如果他为了救一个人，牺牲了一场可以救十万人的战役，这是善还是恶？",
+      "游戏的本质，从来不是争对错，而是争谁的定义框住了观众的思维。",
+      "辩论的核心竞争力，是基于逻辑的急智——10秒内看透对方的论证漏洞并重新定义框架。"
+    ],
+    wisdom: "辩论的目的不是说服对手，而是影响观众。核心竞争力，是在10秒内看透对方的论证漏洞，然后重新定义战场。",
+    application: "做提案时，不要陷入对方的框架里去回应。比如对方说「这个活动预算太高了」，别急着说「不高，值得的」。先重新定义框架：我们讨论的不是预算多少，而是每一块钱带来的会员增长ROI。把战场换到你擅长的地方。",
+    reflection: "最近一次你在会议中处于下风，是因为对方的论据比你强，还是因为他控制了讨论的框架？"
+  },
+  {
+    chapter: "第三章",
+    title: "人生商业模式：能力 × 效率 × 杠杆",
+    paragraphs: [
+      "刘润在微软做到高管，但他发现自己的商业模式有个致命问题：能力再强，时间是上限。每一个小时只能卖给一个客户，一年365天是天花板。",
+      "他意识到：<span class='hl'>真正的人生商业模式，是能力 × 效率 × 杠杆。</span>",
+      "能力，是你能做什么；效率，是你用多少时间做到；杠杆，是你能借助什么放大你的能量——资金杠杆、流量杠杆、团队杠杆、产品杠杆、品牌杠杆。",
+      "没有杠杆的人生，再努力，都只是在卖时间。"
+    ],
+    wisdom: "只靠卖时间，永远有上限。找到你的能力，提升效率，然后找到能放大你的杠杆——让一份努力产生十倍的回报。",
+    application: "你在新角色里，本质上是在建立一套 Retail Optimisation 的方法论。这套方法论如果只靠你一个人执行，就是无杠杆。你的杠杆是：写成 SOP、培训团队、做成可复制的 playbook。这样你的能力就能乘以整个 chain 的门店数量。",
+    reflection: "你现在的工作里，哪些是卖时间（做了才有），哪些是在建立杠杆（建好了持续放大）？"
+  },
+  {
+    chapter: "第三章",
+    title: "35岁之前，不要太在乎薪水",
+    paragraphs: [
+      "有个年轻人，为了多500块的月薪，从一家可以学到核心运营技能的公司，跳槽到一家薪水高但学不到东西的公司。五年后，他后悔了。",
+      "刘润说：<span class='hl'>在35岁之前，最重要的收入不是钱，是成长。</span>当初为了多几百块跳槽，是多么愚蠢。",
+      "薪水是短期结果，能力才是长期复利。一个在30岁积累了10倍能力的人，和一个只拿了5%更高月薪的人，40岁的差距，是鸿沟。",
+      "把工作当学校，把公司当实验室。多学一种思维框架，多做一次0到1的项目，价值远超几百块的月薪差距。"
+    ],
+    wisdom: "35岁之前，最宝贵的收入是能力密度，不是薪水数字。选择一份工作，要问：这里能让我成长多快？",
+    application: "选择加入新平台，不应该只是因为薪水或职位，更应该是因为这个平台能给你的学习密度——你能接触多少不同的零售业态、多少数据驱动的决策、多少跨品类的优化机会。这才是这次跳槽真正的薪水。",
+    reflection: "你在过去这些年，哪三项能力是你最宝贵的收入？这些在你的下一份工作里，值多少钱？"
+  },
+  {
+    chapter: "第三章",
+    title: "复利思维：早期靠本金，后期靠复利",
+    paragraphs: [
+      "很多人误解复利——以为只要开始投资，时间就会帮他们实现财富自由。",
+      "但刘润算了一笔账：<span class='hl'>复利的真正秘密，是本金。</span>如果你用每年5%的收益率滚30年，你需要先有300万的本金，才能在退休时有1200万。那300万的本金从哪来？靠的是你早年创造价值的能力，不是复利本身。",
+      "世界富豪榜前100名，90%以上靠的是第一桶金——是他们主动创造的财富，而不是钱生钱。",
+      "结论很简单：早期靠本金（拼命创造、积累价值），后期靠复利（让已有的资产滚动）。"
+    ],
+    wisdom: "别在没有本金时幻想复利。先去把本金做大——本金来自你创造价值的能力，不来自利滚利。",
+    application: "门店增长也是同理：先把几个核心门店打造成高本金的样板——高流量、高转化、高口碑——然后再靠这个模型复制。没有样板就复制，是在没有本金时玩复利，大概率失败。",
+    reflection: "你的第一桶金是什么？是你积累的哪些具体的、可复用的能力或资产？"
+  },
+  {
+    chapter: "第三章",
+    title: "人脉的本质是给予，不是索取",
+    paragraphs: [
+      "很多人把人脉理解为认识多少大人物，于是不断去刷脸、参加名流聚会、递名片。但刘润说，他们完全搞错了方向。",
+      "<span class='hl'>人脉的本质，是价值的双向交换。</span>你能给对方什么？如果你什么都给不了，再多认识也是无效人脉。",
+      "真正的人脉，是你有价值，别人自然愿意和你连接。与其花时间拓展人脉，不如花时间成为一个有价值的人——那时候，人脉会自动来找你。",
+      "人脉不是你认识多少人，而是多少人认识你——因为你有价值，他们愿意主动和你保持联系。"
+    ],
+    wisdom: "不要去经营人脉，要去经营自己的价值。当你足够有价值，人脉会主动来找你。",
+    application: "你和供应商、品牌代表的关系，本质上也是人脉。维护这些关系的方法，不是送礼吃饭，而是：你是否帮他们解决了问题？你的门店是否给了他们好的销量反馈和曝光？给予才是最强的人脉投资。",
+    reflection: "你最有价值的三段人脉，对方愿意维系这段关系，是因为你给了他们什么？"
+  },
+  {
+    chapter: "第四章",
+    title: "边界感的本质：对所有权的认知",
+    paragraphs: [
+      "为什么有的人总是喜欢插手别人的事？刘润给出了一个颠覆常识的解释：<span class='hl'>边界感差，本质上是对所有权认知模糊。</span>",
+      "「你这样做不对，你应该那样做」——这句话的潜台词是：你的人生是我的资产，我有权利管理它。",
+      "真正有边界感的人，清楚地知道：哪些是我的课题，哪些是你的课题。你的课题，我没有被邀请就不介入；我的课题，我欢迎你的意见，但决定权在我。",
+      "课题分离，是健康关系的基石。"
+    ],
+    wisdom: "课题分离：你的人生是你的课题，我的人生是我的课题。关心不等于介入，建议不等于要求。",
+    application: "管理下属时，给清楚的目标和资源，然后放手让他们执行。不要每一步都去插手——那是在侵犯他们的所有权，既削弱了他们的主动性，也消耗了你的精力。边界清晰的管理者，反而带出更有担当的团队。",
+    reflection: "你最近有没有越界管了别人的课题？或者有没有别人越界进入了你的课题？这让你们各自有什么感受？"
+  },
+  {
+    chapter: "第四章",
+    title: "幽默是溢出的智慧",
+    paragraphs: [
+      "为什么同样的一句话，有人说出来让人捧腹大笑，有人说出来只有尴尬？",
+      "刘润说：<span class='hl'>幽默是智慧溢出的表现。</span>真正的幽默，不是讲笑话，而是一种认知密度的突然释放——你本以为是A，结果是B，而B和A之间有一种意想不到但又完全合理的逻辑联系。",
+      "这个「啊哈」的瞬间，就是幽默。所以幽默是可以培养的：不是去背笑话，而是提升认知密度，让自己的思维能在瞬间看到别人没看到的连接。",
+      "想变得幽默？多读书、多思考，让你的认知溢出——当你的认知远超表达时，幽默就会自然流露。"
+    ],
+    wisdom: "幽默不是天赋，是认知溢出的副产品。提升认知密度，幽默自然而来。",
+    application: "在带团队时，领导者偶尔的幽默能打破紧张气氛，建立信任感。不需要刻意搞笑，而是在适当时机说出那个意料之外但情理之中的观察，让会议室里的人会心一笑——这就是高效的团队文化投资。",
+    reflection: "上一次让你真心大笑的工作场景是什么？那种轻松的氛围，对团队协作有什么影响？"
+  },
+  {
+    chapter: "第五章",
+    title: "利润来自没有竞争",
+    paragraphs: [
+      "很多创业者问刘润：我怎么能赚更多钱？刘润说：这个问题问错了。正确的问题是：<span class='hl'>我怎么能进入一个没有竞争的地方？</span>",
+      "只要有竞争，利润就会被压缩到趋近于零。经济学的基本原理告诉我们：在完全竞争市场里，利润率最终会归零。",
+      "真正的利润，来自于某种护城河——技术壁垒、品牌溢价、网络效应、先发优势、独家资源。没有护城河，再努力也只是在一个越来越小的蛋糕里争份额。",
+      "不要问怎么在竞争中赢，要问怎么找到没有竞争的地方。差异化不是为了好看，是为了逃离竞争。"
+    ],
+    wisdom: "不要问「怎么在竞争中赢」，要问「怎么找到没有竞争的地方」。差异化不是为了好看，是为了逃离竞争。",
+    application: "Alpro Sugi 的核心逻辑就在这里：日系概念、独家日本品牌（PBNB）、特定的消费者情绪价值——这些都是在创造没有竞争的空间。帮助门店找到差异化的品类护城河，而不是和所有药店打价格战。",
+    reflection: "你目前或即将做的工作，在市场上有几个人在做同样的事？你的护城河是什么？"
+  },
+  {
+    chapter: "第五章",
+    title: "信用是一个人最大的资产",
+    paragraphs: [
+      "有人借了10万给朋友，朋友到期没还，又借给了他5万——结果20万都打了水漂。",
+      "刘润说，这个人犯了一个认知错误：他以为自己在帮朋友，其实是在<span class='hl'>帮对方消费信用</span>，并且用自己的钱为对方的失信行为买单。",
+      "信用是一个人最大的资产，比钱更值钱。因为钱赔了可以再赚，但信用一旦透支，再难修复。",
+      "承诺比说「我尽力」更贵。不要轻易承诺，但一旦承诺，用一切代价去兑现。"
+    ],
+    wisdom: "你的信用账户，每次兑现承诺就在加息，每次违约就在透支。信用比人脉、比资历，都更值钱。",
+    application: "和供应商、品牌方、商场管理层打交道，你最大的资产就是信用。答应了的条件要做到，说好的陈列要兑现，谈妥的活动要落地。哪怕对方忘了，你也要记得——那是你的信用账户在持续加息。",
+    reflection: "你在工作中，有没有一个没有完全兑现的承诺？现在还来得及补救吗？"
+  },
+  {
+    chapter: "第五章",
+    title: "劝酒的本质：服从性测试",
+    paragraphs: [
+      "很多职场人都遇到过：在饭局上，上级或客户拼命劝酒，你不喝就是不给面子。",
+      "刘润一针见血：<span class='hl'>劝酒的本质，是服从性测试。</span>他们不是真的在关心你是否喝得开心，而是在测试：你愿不愿意为了我，放弃自己的底线、牺牲自己的身体？",
+      "如果你喝了，证明你可以被控制，往后你会被要求做更多越界的事。",
+      "真正值得尊重的关系，不需要对方牺牲原则来证明忠诚。有底线的人，会被真正的合作伙伴尊重；没有底线的人，只会被继续测试。"
+    ],
+    wisdom: "当有人用「给不给面子」逼你做不舒服的事，认清这是服从性测试。你的底线，是你最重要的资产之一。",
+    application: "在和供应商、商场管理方的关系中，保持专业边界非常重要。你可以喝一杯表示友好，但坚持自己的状态，这反而建立更长远的信任。专业的人不需要用失去自我来换取关系。",
+    reflection: "你有没有为了不得罪人而做过一些实际上已经越过了自己底线的事？那件事的结果是什么？"
+  },
+  {
+    chapter: "第五章",
+    title: "效率与公平的永恒矛盾",
+    paragraphs: [
+      "一家公司决定给所有员工同等比例加薪——不管业绩好坏，每人加5%。HR说这样公平。但销售冠军愤然离职：我比他们多做了三倍的业绩，却只多加了几百块。",
+      "刘润说：<span class='hl'>效率与公平，永远是一对矛盾。</span>追求绝对公平，就会牺牲效率；追求极致效率，就会有人感到不公平。",
+      "没有完美的解，只有在两者之间找到适合当下阶段的平衡点。在公司早期，优先效率（让最能干的人拿最多）；在公司稳定期，适当向公平倾斜（稳定团队）。",
+      "不同阶段，答案不同。领导者的工作，就是不断校准这个平衡点。"
+    ],
+    wisdom: "效率与公平永远是矛盾的。你的工作不是找到完美答案，而是在当下阶段找到最合适的平衡点，并清晰地向团队解释这个逻辑。",
+    application: "设计门店绩效激励时，纯平均主义会让优秀员工心寒，但差距过大又会破坏团队氛围。底薪保公平，奖金保效率——这是一个经典的平衡结构，值得思考如何应用在你的场景里。",
+    reflection: "你现在的团队激励制度，更偏向效率还是公平？哪一端的人可能正在不满？"
+  },
+  {
+    chapter: "第五章",
+    title: "产品定价：由竞争决定，不由成本决定",
+    paragraphs: [
+      "很多老板问：我的成本是50块，我该卖多少钱？刘润说：<span class='hl'>这个问题问错了。</span>",
+      "定价不是成本加利润，而是由市场竞争和消费者愿意支付的价值决定的。如果市场上同类产品卖30块，你成本50块，就应该降低成本或退出这个市场，而不是卖70块然后抱怨没人买。",
+      "反过来，如果你的产品能给消费者带来300块的价值，哪怕成本只有20块，你一样可以卖200块——那不叫暴利，那叫价值定价。",
+      "把精力放在创造更高的感知价值，而不是计算成本加成。"
+    ],
+    wisdom: "定价看的不是成本，是消费者感知到的价值和市场竞争格局。营销工作的本质，就是不断强化消费者的感知价值。",
+    application: "Alpro Sugi 的日系护肤品之所以能定高价，不是因为成本高，而是因为消费者愿意为正品日本货、专业日式服务、品牌故事支付溢价。你的营销工作，本质是在不断强化消费者的感知价值，让他们觉得值。",
+    reflection: "你最近经手的某个产品，定价是基于成本加成，还是基于消费者价值感知？如果重新定，你会怎么定？"
+  },
+  {
+    chapter: "第五章",
+    title: "KPI vs OKR：用对工具，不用流行工具",
+    paragraphs: [
+      "OKR流行时，很多公司一窝蜂地废弃KPI，觉得Google怎么做我们就怎么做。结果一团糟。",
+      "刘润说：<span class='hl'>KPI和OKR各有适用场景。</span>KPI适合确定性高、任务明确、结果可量化的工作；OKR适合探索性高、创新驱动、需要主动性的工作。",
+      "问题不是用哪个工具，而是你的工作性质是哪一种——然后用对的工具，而不是用流行的工具。",
+      "不要问用KPI还是OKR，要问这项工作是确定性高还是探索性高——前者用KPI，后者用OKR。"
+    ],
+    wisdom: "工具没有好坏，只有适不适合。先判断工作性质，再选工具——而不是看哪个工具流行就用哪个。",
+    application: "门店日常运营（销售达成、补货率、服务流程）适合KPI，有明确目标和标准。新业态探索（社群运营、内容策划、会员活动设计）适合OKR，给空间让团队创新。混用两种工具，别把门店运营当创业公司管。",
+    reflection: "你现在管理的某个项目，用的是KPI思维还是OKR思维？它适合吗？"
+  },
+  {
+    chapter: "第五章",
+    title: "公平、公正、公开：三个词的真正差异",
+    paragraphs: [
+      "一家公司分配年终奖，CEO说要做到公平、公正、公开。但奖金一发，员工还是怨声载道。问题出在哪？",
+      "刘润解释：<span class='hl'>公平，是结果相同；公正，是规则相同；公开，是过程透明。</span>这三个词是不同层次的要求。",
+      "你可以做到公正（所有人按同一套规则打分）和公开（打分过程所有人可见），但结果不可能公平——因为每个人的贡献不一样。",
+      "很多管理者把公正说成公平，结果让员工觉得被欺骗。向团队承诺公正和公开，而不是承诺公平——那才是诚实而可实现的管理承诺。"
+    ],
+    wisdom: "向团队承诺公正（规则透明一致）和公开（过程可见），而不是承诺公平（人人结果相同）。说清楚差异，团队的怨气会少很多。",
+    application: "在给门店做绩效评估或资源分配时，向团队说清楚：这套规则是什么、如何衡量、评分过程如何。结果一定有差异，这是合理的。把这个逻辑讲清楚，比悄悄做决定再解释要有效得多。",
+    reflection: "你最近一次「不公平」的感受，究竟是结果不同（可接受的差异），还是规则本身就不一致（真正的不公正）？"
+  }
+];
+
+var currentIndex = 0;
+var readStories = [];
+var streak = 1;
+
+try {
+  var saved = localStorage.getItem('dlljReadStories');
+  if (saved) readStories = JSON.parse(saved);
+  var savedStreak = localStorage.getItem('dlljStreak');
+  if (savedStreak) streak = parseInt(savedStreak);
+  var today = new Date().toDateString();
+  var lastVisit = localStorage.getItem('dlljLastVisit');
+  if (lastVisit !== today) {
+    var yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (lastVisit === yesterday.toDateString()) {
+      streak += 1;
+    } else {
+      streak = 1;
+    }
+    localStorage.setItem('dlljStreak', streak);
+    localStorage.setItem('dlljLastVisit', today);
+  }
+} catch(e) {}
+
+function getDayOfYear() {
+  var now = new Date();
+  var start = new Date(now.getFullYear(), 0, 0);
+  var diff = now - start;
+  return Math.floor(diff / (1000 * 60 * 60 * 24));
+}
+
+currentIndex = getDayOfYear() % stories.length;
+
+function formatDate() {
+  var now = new Date();
+  var days = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+  return now.getFullYear() + '年' + (now.getMonth()+1) + '月' + now.getDate() + '日 ' + days[now.getDay()];
+}
+
+function markAsRead(index) {
+  if (readStories.indexOf(index) === -1) {
+    readStories.push(index);
+    try { localStorage.setItem('dlljReadStories', JSON.stringify(readStories)); } catch(e) {}
+  }
+}
+
+function renderDots() {
+  var container = document.getElementById('dotsContainer');
+  container.innerHTML = '';
+  for (var i = 0; i < stories.length; i++) {
+    var dot = document.createElement('div');
+    dot.className = 'dot';
+    if (readStories.indexOf(i) !== -1) dot.className += ' read';
+    if (i === currentIndex) dot.className += ' current';
+    (function(idx) {
+      dot.onclick = function() { goToStory(idx); };
+    })(i);
+    container.appendChild(dot);
+  }
+}
+
+function renderStats() {
+  document.getElementById('readCount').textContent = readStories.length;
+  document.getElementById('streakCount').textContent = streak;
+}
+
+function renderStory(index) {
+  var story = stories[index];
+  document.getElementById('chapterTag').textContent = story.chapter;
+  document.getElementById('storyTitle').textContent = story.title;
+  var narrativeEl = document.getElementById('storyNarrative');
+  narrativeEl.innerHTML = '';
+  for (var i = 0; i < story.paragraphs.length; i++) {
+    var p = document.createElement('p');
+    p.innerHTML = story.paragraphs[i];
+    narrativeEl.appendChild(p);
+  }
+  document.getElementById('wisdomText').textContent = story.wisdom;
+  document.getElementById('applicationText').textContent = story.application;
+  document.getElementById('reflectionText').textContent = story.reflection;
+  markAsRead(index);
+  renderDots();
+  renderStats();
+}
+
+function goToStory(index) {
+  var card = document.getElementById('storyCard');
+  card.classList.add('fade-out');
+  setTimeout(function() {
+    currentIndex = index;
+    renderStory(currentIndex);
+    card.classList.remove('fade-out');
+    card.classList.add('visible');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, 300);
+}
+
+document.getElementById('prevBtn').addEventListener('click', function() {
+  goToStory((currentIndex - 1 + stories.length) % stories.length);
+});
+document.getElementById('nextBtn').addEventListener('click', function() {
+  goToStory((currentIndex + 1) % stories.length);
+});
+
+document.getElementById('dateDisplay').textContent = formatDate();
+renderStory(currentIndex);
+setTimeout(function() {
+  document.getElementById('storyCard').classList.add('visible');
+}, 100);
+
+})();
+</script>
+</body>
+</html>
